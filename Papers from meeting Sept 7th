@@ -1,0 +1,12 @@
+Papers discussed during 9/7/18 meeting
+
+1.	Improving LDA topic models for microblogs via tweet pooling and automatic labeling
+  Link: https://dl.acm.org/citation.cfm?id=2484166
+  This paper discusses the importance of pooling tweets by their hashtags and making those a single document for the LDA model
+ 
+2.	Twitter-Network Topic Model: A Full Bayesian Treatment for Social Network and Text Modeling
+  Link: https://arxiv.org/abs/1609.06791
+  This paper discusses the importance of a Twitter-Network model that employs the usage of a hierarchical Poisson Dirichlet Process to pool hashtags (idea from earlier paper repeated). Additionally, the paper puts importance on the significance of authors, as well as  a followers network
+3.	Spatio-temporal Analysis of Dynamic Origin-Destination Data Using Latent Dirichlet Allocation: Application to Vélib' Bike Sharing System of Paris
+  Link: https://hal.archives-ouvertes.fr/hal-01052951/
+  Paper discussing a spatial and a temporal effect in LDA (Did not discuss much)
