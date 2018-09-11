@@ -1,0 +1,99 @@
+%        File: gen_models.tex
+%     Created: Tue Sep 11 02:00 PM 2018 E
+% Last Change: Tue Sep 11 02:00 PM 2018 E
+%
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+
+\makeatletter
+\def\BState{\State\hskip-\ALG@thistlm}
+\makeatother
+
+\title{Generative Models for SpatioTemporal Topic Modeling}
+\author{Newt Gingrich}
+
+\begin{document}
+\maketitle
+
+\section{AR Process on log Dirichlet Concentration}
+
+\textbf{Notation:}
+
+Indices:
+\begin{itemize}
+    \item $K$ number of topics
+    \item $V$ size of vocabulary
+    \item $L$ number of locations
+    \item $Y$ number of time points
+    \item $P$ number of spatial dimensions
+\end{itemize}
+
+Hyperparameters:
+\begin{itemize}
+    \item $\eta$ dirichlet hyperparameter for word-topic concentrations
+\end{itemize}
+
+Parameters:
+\begin{itemize}
+    \item $\Omega \in \mathbb{R}^{Y\times L\times K}$ log concentration parameters for document-topic prevalence.
+    \item $\sigma_{\omega}$ isotropic error for matrix AR process on $\Omega$.
+    \item $\phi \in \mathbb{R}^{K\times V}$ topic - word probability matrix.
+    \item $w_{y,l,m,n}$ the word in position $n$ of the $m$'th document at location $l$ at time $y$.
+    \item $z_{y,l,m,n}$ the topic associated with $w_{y,l,m,n}$.
+\end{itemize}
+
+\begin{algorithm}
+\caption{StLda1}\label{euclid}
+\begin{algorithmic}[1]
+    \State \Comment{Generate Spatiotemporal priors}
+    \State $\Omega_{1} \sim N(\mathbf{0}, \sigma_{\omega} \mathbf{I})$ 
+
+    \For{$y \in \{2, \ldots, Y\}$}
+    \State $\epsilon_{t} \sim \textrm{iid} N(0, \sigma_{\omega})$
+    \State $\Omega_{y} \gets \mathbf{B} \Omega_{y-1} + \epsilon_{t}$
+      \EndFor
+
+    \For{$y \in \{1, \ldots, Y\}$}
+    \State $\mathbf{A}_{y} \gets \exp \odot \Omega_{y-1}$
+      \EndFor
+
+      \State \Comment{Generate Topics (standard LDA)}
+
+      \For{$k \in \{1, \ldots, K\}$}
+      \State $\phi_k \sim \textrm{Dir}(\eta)$
+      \EndFor
+
+      \State \Comment{Generate Document-Topic Prevalences}
+
+      \For{$y \in \{1, \ldots, Y\}$}
+      \For{$l \in \{1, \ldots, L\}$}
+      \For{$m \in \{1, \ldots, M\}$}
+      \State $\theta_{y, l, m} \sim \textrm{Dir}(\mathbf{A}_{y,l})$
+      \EndFor
+      \EndFor
+      \EndFor
+
+      \State \Comment{Generate Document-Topic Prevalences}
+
+      \For{$y \in \{1, \ldots, Y\}$}
+      \For{$l \in \{1, \ldots, L\}$}
+      \For{$m \in \{1, \ldots, M\}$}
+      \For{$n \in \{1, \ldots, N_m\}$}
+      \State $z_{y,l,m,n} \sim \textrm{Mult}(\theta_{y,l,m})$
+      \State $w_{y,l,m,n} \sim \textrm{Mult}(\phi_{z_{y,l,m,n}})$
+      \EndFor
+      \EndFor
+      \EndFor
+      \EndFor
+\end{algorithmic}
+\end{algorithm}
+
+
+\end{document}
+
+
