@@ -45,6 +45,8 @@ Parameters:
     \item $\phi \in \mathbb{R}^{K\times V}$ topic - word probability matrix.
     \item $w_{y,l,m,n}$ the word in position $n$ of the $m$'th document at location $l$ at time $y$.
     \item $z_{y,l,m,n}$ the topic associated with $w_{y,l,m,n}$.
+    \item $\boldsymbol{B}^{L \times L}$ matrix based on distances between the spatial locations divided by a scalar length scale
+    \item $\boldsymbol{A}^{Y \times L \times K}$ matrix based on an AR(1) process 
 \end{itemize}
 
 \begin{algorithm}
@@ -59,7 +61,7 @@ Parameters:
       \EndFor
 
     \For{$y \in \{1, \ldots, Y\}$}
-    \State $\mathbf{A}_{y} \gets \exp \odot \Omega_{y-1}$
+    \State $\mathbf{A}_{y} \gets \exp \odot \Omega_{y}$
       \EndFor
 
       \State \Comment{Generate Topics (standard LDA)}
