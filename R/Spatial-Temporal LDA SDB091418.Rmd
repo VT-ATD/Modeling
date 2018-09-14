@@ -1,0 +1,139 @@
+---
+title: "Coding up StLDA"
+author: "Shane Bookhultz"
+date: "9/13/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, echo = F}
+
+suppressWarnings(library("MASS"))
+
+```
+
+## Coding up StLDA
+
+Variables included:\newline
+Indices:
+\begin{itemize}
+  \item K: The number of topics in a document
+  \item V: The size of the vocabulary to pull from each document
+  \item L: The number of locations (Spatial)
+  \item Y: The number of time points (Temporal)
+  \item P: The number of spatial dimensions
+\end{itemize}
+Hyperparameters:
+\begin{itemize}
+  \item $\eta$ dirichlet hyperparameter for the concentration of each word in each topic
+\end{itemize}
+\newline
+Parameters:
+\begin{itemize}
+  \item $\Omega \in \mathbb{R}^{Y \times L \times K}$ log concentration parameters for the document-topic prevalence 
+  \item $\sigma_w$ isotropic error for matrix AR process on $\Omega$
+  \item $\phi \in \mathbb{R}^{K \times V}$ topic - word probability matrix.
+  \item $w_{y,l,m,n}$ the word in position n of the m'th document at location l at time y.
+  \item $z_{y,l,m,n}$ the topic associated with $w_{y,l,m,n}$
+\end{itemize}
+
+```{r echo = F}
+# Actual code of the LDA
+set.seed(6787)
+# Dummy set up for each variable for the LDA
+# Indices/hyperparams
+K <- 14
+V <- 15
+L <- 5
+Y <- 10
+p <- 3
+M <- 10 # Number of documents
+eta <- rep(1, times = V)
+theta <- 1 #length scale
+avgsize <- 6 # Average length of document
+
+
+Diri.func <- function(alphavec) {
+  # K is the number of categories in the dirichlet distribution
+  # Alphavec is the vector that 
+  # K-1 is the number of dimensions
+  K1 <- length(alphavec)
+  # One gamma var from 
+  # BNunch of gamma vars from a gamma alpha i, 1 dist, put in a vector and divide by a sum gives a dirichlet
+  simvec <- rgamma(K1,alphavec,rate = 1)
+  return (simvec)
+}
+
+# Parameters
+
+OMEGA <- array(dim=c(Y,L,K))
+sigma_m <- 1 # Isotropic error
+phi <- matrix(NA, nrow = K, ncol = V)
+
+OMEGA[1,,] <- matrix(rnorm(L*K, mean = 0, sd = sigma_m))
+
+
+# B is a matrix full of the distances between the l points based off of a kernel of a gaussian
+
+SpatialLocs <- matrix(rnorm(L*p), nrow = L, ncol = p)
+
+
+B <- exp(-as.matrix(dist(SpatialLocs)/theta))
+# B is LxL
+
+for(y in 2:Y) {
+  epsilon_t <- matrix(rnorm(L*K,mean = 0, sd = sigma_m),nrow = L, ncol = K)
+  OMEGA[y,,] <- B %*% OMEGA[(y-1),,] + epsilon_t
+}
+
+A <- array(dim=c(Y,L,K))
+
+for(y1 in 1:Y) {
+  A[y1,,] <-  exp(OMEGA[y1,,])
+} # I think this is what he means, but the indices on the omega matrix are y-1
+
+
+# Generating topics (LDA)
+
+for (k in 1:K) {
+  phi[k,] <- Diri.func(eta)
+}
+
+# Document-Topic prevalence
+# Prior on the topic multinomial distribution
+priormultiz <- array(dim=c(Y,L,M,K))
+# Y temporal points, L spatial points, M documents, K for the dirichlet length
+
+# This is n length of each document
+doclengthvec <- rpois(K,avgsize)
+
+topicarray.z <- array(dim=c(Y,L,M,max(doclengthvec)))
+wordarray.w <- array(dim=c(Y,L,M,max(doclengthvec)))
+
+for (y2 in 1:Y) { #Temporal
+  for (l in 1:L) { #Spatial
+    for(m  in 1:M) { #Each document
+      # Create the dirichlet distribution
+      
+      priormultiz[y2,l,m,] <- Diri.func(A[y2,l,])
+      
+      for(n in 1:doclengthvec[m]) {
+        
+        topicarray.z[y2,l,m,n] <- sample(1:K, size = 1, prob = priormultiz[y2,l,m,])
+        
+        wordarray.w[y2,l,m,n] <- sample(1:V, size = 1, prob = phi[topicarray.z[y2,l,m,n],])
+      }
+    }
+  }
+}
+
+# m < K? 
+# Ask nathan
+
+
+
+
+```
