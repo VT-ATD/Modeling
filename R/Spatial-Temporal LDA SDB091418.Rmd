@@ -17,54 +17,53 @@ suppressWarnings(library("MASS"))
 
 ## Coding up StLDA
 
-Variables included:\newline
+Variables included:
+
 Indices:
-\begin{itemize}
-  \item K: The number of topics in a document
-  \item V: The size of the vocabulary to pull from each document
-  \item L: The number of locations (Spatial)
-  \item Y: The number of time points (Temporal)
-  \item P: The number of spatial dimensions
-\end{itemize}
+
+* K: The number of topics in a document
+* V: The size of the vocabulary to pull from each document
+* L: The number of locations (Spatial)
+* Y: The number of time points (Temporal)
+* P: The number of spatial dimensions
+
 Hyperparameters:
-\begin{itemize}
-  \item $\eta$ dirichlet hyperparameter for the concentration of each word in each topic
-\end{itemize}
-\newline
+
+* $\eta$ dirichlet hyperparameter for the concentration of each word in each topic
+
 Parameters:
-\begin{itemize}
-  \item $\Omega \in \mathbb{R}^{Y \times L \times K}$ log concentration parameters for the document-topic prevalence 
-  \item $\sigma_w$ isotropic error for matrix AR process on $\Omega$
-  \item $\phi \in \mathbb{R}^{K \times V}$ topic - word probability matrix.
-  \item $w_{y,l,m,n}$ the word in position n of the m'th document at location l at time y.
-  \item $z_{y,l,m,n}$ the topic associated with $w_{y,l,m,n}$
-\end{itemize}
+
+* $\Omega \in \mathbb{R}^{Y \times L \times K}$ log concentration parameters for the document-topic prevalence 
+* $\sigma_w$ isotropic error for matrix AR process on $\Omega$
+* $\phi \in \mathbb{R}^{K \times V}$ topic - word probability matrix.
+* $w_{y,l,m,n}$ the word in position n of the m'th document at location l at time y.
+* $z_{y,l,m,n}$ the topic associated with $w_{y,l,m,n}$
+* $\boldsymbol{B}^{L \times L}$ matrix based on distances between the spatial locations divided by a scalar length scale
+* $\boldsymbol{A}^{Y \times L \times K}$ matrix based on an AR(1) process
+
+
 
 ```{r echo = F}
 # Actual code of the LDA
 set.seed(6787)
 # Dummy set up for each variable for the LDA
 # Indices/hyperparams
-K <- 14
+K <- 4
 V <- 15
 L <- 5
 Y <- 10
 p <- 3
 M <- 10 # Number of documents
+
 eta <- rep(1, times = V)
 theta <- 1 #length scale
-avgsize <- 6 # Average length of document
+avgsize <- 6 # Mean words (length) of document
 
 
 Diri.func <- function(alphavec) {
-  # K is the number of categories in the dirichlet distribution
-  # Alphavec is the vector that 
-  # K-1 is the number of dimensions
-  K1 <- length(alphavec)
-  # One gamma var from 
-  # BNunch of gamma vars from a gamma alpha i, 1 dist, put in a vector and divide by a sum gives a dirichlet
-  simvec <- rgamma(K1,alphavec,rate = 1)
-  return (simvec)
+  simvec <- rgamma(length(alphavec),alphavec,rate = 1)
+  rval <- simvec / sum(simvec)
+  return (rval)
 }
 
 # Parameters
@@ -73,7 +72,7 @@ OMEGA <- array(dim=c(Y,L,K))
 sigma_m <- 1 # Isotropic error
 phi <- matrix(NA, nrow = K, ncol = V)
 
-OMEGA[1,,] <- matrix(rnorm(L*K, mean = 0, sd = sigma_m))
+OMEGA[1,,] <- matrix(rnorm(L*K, mean = 0, sd = sigma_m), nrow = L, ncol = K)
 
 
 # B is a matrix full of the distances between the l points based off of a kernel of a gaussian
@@ -83,6 +82,8 @@ SpatialLocs <- matrix(rnorm(L*p), nrow = L, ncol = p)
 
 B <- exp(-as.matrix(dist(SpatialLocs)/theta))
 # B is LxL
+# B lower triangular
+B[lower.tri(B)] <- 0
 
 for(y in 2:Y) {
   epsilon_t <- matrix(rnorm(L*K,mean = 0, sd = sigma_m),nrow = L, ncol = K)
@@ -107,8 +108,8 @@ for (k in 1:K) {
 priormultiz <- array(dim=c(Y,L,M,K))
 # Y temporal points, L spatial points, M documents, K for the dirichlet length
 
-# This is n length of each document
-doclengthvec <- rpois(K,avgsize)
+# This is n length of each document, this doesn't take into account location
+doclengthvec <- rpois(M,avgsize)
 
 topicarray.z <- array(dim=c(Y,L,M,max(doclengthvec)))
 wordarray.w <- array(dim=c(Y,L,M,max(doclengthvec)))
@@ -129,11 +130,5 @@ for (y2 in 1:Y) { #Temporal
     }
   }
 }
-
-# m < K? 
-# Ask nathan
-
-
-
 
 ```
