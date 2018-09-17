@@ -33,7 +33,7 @@ X <- matrix(rnorm(L*p), nrow = L, ncol = p)
 
 # Generate the OMEGA coefficient matrix
 B <- exp(-as.matrix(dist(X)^2 / l_kern))
-B[lower.tri(B)] <- 0
+B <- B / sum(diag(B))
 
 # Generate OMEGAs for each time period
 OMEGAs <- lapply(1:Y, function(y) matrix(NA, nrow = L, ncol = K))
