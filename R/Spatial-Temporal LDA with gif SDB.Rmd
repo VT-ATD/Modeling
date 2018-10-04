@@ -1,0 +1,272 @@
+---
+title: "Coding up StLDA"
+author: "Shane Bookhultz"
+date: "9/14/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, echo = F}
+
+suppressWarnings(library("ggplot2"))
+suppressWarnings(library("caTools"))
+#magick to convert to gif
+suppressWarnings(library("magick"))
+suppressWarnings(library("pdftools"))
+
+```
+
+## Coding up StLDA
+
+Variables included:
+
+Indices:
+
+* K: The number of topics in a document
+* V: The size of the vocabulary to pull from each document
+* L: The number of locations (Spatial)
+* Y: The number of time points (Temporal)
+* P: The number of spatial dimensions
+
+Hyperparameters:
+
+* $\eta$ dirichlet hyperparameter for the concentration of each word in each topic
+
+Parameters:
+
+* $\Omega \in \mathbb{R}^{Y \times L \times K}$ log concentration parameters for the document-topic prevalence 
+* $\sigma_w$ isotropic error for matrix AR process on $\Omega$
+* $\phi \in \mathbb{R}^{K \times V}$ topic - word probability matrix.
+* $w_{y,l,m,n}$ the word in position n of the m'th document at location l at time y.
+* $z_{y,l,m,n}$ the topic associated with $w_{y,l,m,n}$
+* $\boldsymbol{B}^{L \times L}$ matrix based on distances between the spatial locations divided by a scalar length scale
+* $\boldsymbol{A}^{Y \times L \times K}$ matrix based on an AR(1) process
+
+```{r Softmax func, echo = F}
+# This is a softmax function by Nathan Wycoff
+softmax <- function(x) {
+    exp(x - max(x) - log(sum(exp(x - max(x)))))
+}
+
+```
+
+
+
+```{r echo = F}
+# Actual code of the LDA
+set.seed(6787)
+# Dummy set up for each variable for the LDA
+# Indices/hyperparams
+K <- 20
+V <- 15
+L <- 121
+Y <- 20
+p <- 2
+M <- 10 # Number of documents
+
+eta <- rep(1, times = V)
+theta <- 1 #length scale
+avgsize <- 6 # Mean words (length) of document
+
+
+Diri.func <- function(alphavec) {
+  simvec <- rgamma(length(alphavec),alphavec,rate = 1)
+  rval <- simvec / sum(simvec)
+  return (rval)
+}
+
+# Parameters
+
+OMEGA <- array(dim=c(Y,L,K))
+sigma_m <- 0.3 # Isotropic error
+phi <- matrix(NA, nrow = K, ncol = V)
+
+# Need to change the above to have it be set up on my own
+
+#OMEGA[1,,] <- matrix(rnorm(L*K, mean = 0, sd = sigma_m), nrow = L, ncol = K)
+
+ 
+
+# B is a matrix full of the distances between the l points based off of a kernel of a gaussian
+
+#SpatialLocs <- matrix(rnorm(L*p), nrow = L, ncol = p)
+# Initialize the spatial locs to be what I want it to be as well
+SpatialLocs <- expand.grid(x = seq(-5,5,by = 1), y = seq(-5,5,by = 1))
+SpatialLocs <- array(SpatialLocs)
+# 2 D spatial location matrix to put my heatmap on 
+#SpatialLocs <- cbind(SpatialLocs, rep(0.5,times = length(dim(SpatialLocs)[1])))
+#colnames(SpatialLocs) <- c("x","y","z")
+
+B <- exp(-as.matrix(dist(SpatialLocs)/theta))
+B <- B / norm(B)#sum(diag(B))
+# B is LxL
+# B lower triangular
+#B[lower.tri(B)] <- 0
+
+# Only start one at one and then start the other at 0 for the softmax
+
+
+
+OMEGA[1,,] <- rbind(c(rnorm( (K/2), 100, 0.1),rnorm( (K/2), -100, 0.1)),
+                    matrix(0,nrow = (L-2), ncol = K),
+                    c(rnorm( (K/2), -100, 0.1), rnorm( (K/2), 10, 0.1)))
+
+for(y in 2:Y) {
+  epsilon_t <- matrix(rnorm(L*K,mean = 0, sd = sigma_m),nrow = L, ncol = K)
+  OMEGA[y,,] <- B %*% OMEGA[(y-1),,] + epsilon_t
+}
+
+plotting <- array(dim=c(Y,L,K))
+topicprobs <- array(dim=c(Y,L,2))
+
+# for(b in 1:Y) {
+#   plotting[b,,] <- apply(OMEGA[b,,],1,function(x) softmax(x))
+# }
+# rm(b)
+
+plotheatmap <- list(replicate(Y,matrix(NA,nrow = L, ncol = 3)))
+plotheatmapmat <- array(dim=c(Y,L,3))
+
+
+for(a in 1:Y) {
+  for(b in 1:L) {
+    plotting[a,b,] <- softmax(OMEGA[a,b,])
+    topicprobs[a,b,] <- c(sum(plotting[a,b,1:(K/2)]),sum(plotting[a,b,((K/2)+1):K]))
+  }
+  mymat <- cbind(SpatialLocs,topicprobs[a,,1])
+  colnames(mymat) <- c("x","y","z")
+  plotheatmap[[a]] <- mymat
+}
+rm(a,b)
+#plottingmat <- apply(OMEGA[1,,], 2, function(x) softmax(x))
+# Probably just going to look at the first element of the topicprob matrix for the graphs
+
+
+
+
+
+
+#####################
+# plotting graphs now
+# #####################
+# listplots <- list()
+# for(a in 1:Y) {
+#   intermat <- as.data.frame(plotheatmap[[a]])
+#   colnames(intermat) <- c("x","y","z")
+#   scalec <- scale_color_gradientn(colors = c("#FFFFFF","#000000"), limits = c(0,1))
+#   plot1 <- ggplot(intermat, aes(x=x,y=y,z=z)) 
+#     #stat_contour()
+#   
+#   # More detailed ggplot with bins and color
+#   
+#   plot2 <- ggplot(intermat, aes(x=x,y=y,z=z)) +
+#     #stat_contour(geom = "polygon", aes(fill = ..level..)) + 
+#     geom_tile(aes(fill=z,color=z)) +
+#     stat_contour(bins = 15) + 
+#     xlab("X values") +
+#     ylab("Y values") +
+#     #guides(fill = guide_colorbar(title = "OMEGA[a,,]"), lims = c(0,1)) +
+#     scalec
+#   
+#   # Need to convert this xmatrix into a data frame for ggplot
+#   #intermat <- as.data.frame(plotheatmap[[a]])
+#   #colnames(intermat) <- c("x","y","z")
+#   
+#   
+#   plot3 <- plot2 +
+#     #geom_point(data=intermat,aes(x=x,y=y),shape=1,size=3, color="white") +
+#     theme(plot.title = element_text(hjust = 0.5))
+#   
+#   listplots[[a]] <- plot2
+# }
+listplots2 <- list()
+for(a1 in 1:Y) {
+  # Different try at plotting
+  
+  ppplot <- ggplot(plotheatmap[[a1]], aes(x = x,y=y,fill=z))+
+    geom_tile() + 
+    scale_fill_gradientn(colors = c("white","black"), values = c(0,1)) + 
+    scale_fill_gradient2(low = "red",mid = "white",high = "blue",midpoint = 0.5,limits=c(0,1)) +
+    ggtitle(paste("Time point=",a1)) + xlab("Pseudo longitude") + ylab("Pseudo latitude")
+  #jpeg(filename = paste("LDA prac time =",a1,".jpeg"))
+  #plot(ppplot)
+  listplots2[[a1]] <- ppplot
+  #dev.off()
+}
+
+pdf(file = "Try_example_gif.pdf")
+for(mm in 1:Y) {
+  plot(listplots2[[mm]])
+}
+
+dev.off()
+
+######
+# Converting the pdf to a gicf
+######
+# need pdftools
+heatmappdf <- image_read_pdf("Try_example_gif.pdf")
+
+animation <- image_animate(heatmappdf, fps = 2)
+
+image_write(animation, "Practice-one.gif")
+
+
+
+#system("convert -delay 20 Try_example_gif.pdf example_3_reduced.gif")
+
+A <- array(dim=c(Y,L,K))
+
+for(y1 in 1:Y) {
+  A[y1,,] <-  exp(OMEGA[y1,,])
+} # I think this is what he means, but the indices on the omega matrix are y-1
+
+
+# Generating topics (LDA)
+
+for (k in 1:K) {
+  phi[k,] <- Diri.func(eta)
+}
+
+# Document-Topic prevalence
+# Prior on the topic multinomial distribution
+priormultiz <- array(dim=c(Y,L,M,K))
+# Y temporal points, L spatial points, M documents, K for the dirichlet length
+
+# This is n length of each document, this doesn't take into account location
+doclengthvec <- rpois(M,avgsize)
+
+topicarray.z <- array(dim=c(Y,L,M,max(doclengthvec)))
+wordarray.w <- array(dim=c(Y,L,M,max(doclengthvec)))
+
+for (y2 in 1:Y) { #Temporal
+  for (l in 1:L) { #Spatial
+    for(m  in 1:M) { #Each document
+      # Create the dirichlet distribution
+      
+      priormultiz[y2,l,m,] <- Diri.func(A[y2,l,])
+      
+      for(n in 1:doclengthvec[m]) {
+        
+        topicarray.z[y2,l,m,n] <- sample(1:K, size = 1, prob = priormultiz[y2,l,m,])
+        
+        wordarray.w[y2,l,m,n] <- sample(1:V, size = 1, prob = phi[topicarray.z[y2,l,m,n],])
+      }
+    }
+  }
+}
+
+```
+
+```{r echo = F}
+
+softmax.func <- function(xvec) {
+  # Only works for small x's
+  finalvec <- exp(xvec) / sum(exp(xvec))
+  return (finalvec)
+}
+
+```
