@@ -60,10 +60,6 @@ Parameters:
     \State $\Omega_{y} \gets \mathbf{B} \Omega_{y-1} + \epsilon_{t}$
       \EndFor
 
-    \For{$y \in \{1, \ldots, Y\}$}
-    \State $\mathbf{A}_{y} \gets \exp \odot \Omega_{y}$
-      \EndFor
-
       \State \Comment{Generate Topics (standard LDA)}
 
       \For{$k \in \{1, \ldots, K\}$}
@@ -75,7 +71,7 @@ Parameters:
       \For{$y \in \{1, \ldots, Y\}$}
       \For{$l \in \{1, \ldots, L\}$}
       \For{$m \in \{1, \ldots, M\}$}
-      \State $\theta_{y, l, m} \sim \textrm{Dir}(\mathbf{A}_{y,l})$
+      \State $\theta_{y, l, m} \sim \textrm{N}(\Omega_{y,l}, \sigma_{\theta})$ 
       \EndFor
       \EndFor
       \EndFor
