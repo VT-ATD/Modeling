@@ -71,7 +71,7 @@ Parameters:
       \For{$y \in \{1, \ldots, Y\}$}
       \For{$l \in \{1, \ldots, L\}$}
       \For{$m \in \{1, \ldots, M\}$}
-      \State $\theta_{y, l, m} \sim \textrm{N}(\Omega_{y,l}, \sigma_{\theta})$ 
+      \State $\theta_{y, l, m} \sim \textrm{softmax}[\textrm{N}(\Omega_{y,l}, \sigma_{\theta})]$ 
       \EndFor
       \EndFor
       \EndFor
