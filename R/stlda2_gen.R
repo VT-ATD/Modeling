@@ -34,8 +34,13 @@ gen_stlda <- function(K, M_mu, V, N_mu, L, Y, p = 2, eta = rep(1, V), sigma_om =
     X <- matrix(rnorm(L*p), nrow = L, ncol = p)
 
     # Generate the OMEGA coefficient matrix
-    B <- exp(-as.matrix(dist(X)^2 / l_kern))
-    B <- sigma_b * B 
+    if (L > 1) {
+        B <- exp(-as.matrix(dist(X)^2 / l_kern))
+        B <- sigma_b * B 
+    } else {
+        B <- 1
+        B <- sigma_b * B 
+    }
 
     # Generate OMEGAs for each time period
     OMEGAs <- lapply(1:Y, function(y) matrix(NA, nrow = L, ncol = K))
