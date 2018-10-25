@@ -5,9 +5,9 @@
 
 
 # Test PHI estimation
+require(stlda)
 source('R/stlda2_gen.R')
-source('dev/lib.R')
-source('stlda/R/em_funcs.R')
+
 
 K <- 3
 M_mu <- 200
@@ -31,7 +31,6 @@ attach(ret)
 Zs <- e_step(THETAs, PHI)
 norm(est_PHI(docs, Zs, THETAs) - PHI, '2') < 0.01
 
-
 ## Test the whole enchilada, initializing at the truth.
 K <- 2
 M_mu <- 200
@@ -48,6 +47,8 @@ l_kern = 1
 sigma_theta = 1
 
 ret <- gen_stlda(K, M_mu, V, N_mu, L, Y, p = p, eta = eta, sigma_om = sigma_om, sigma_theta = sigma_theta, sigma_b = sigma_b, l_kern = l_kern)
-
 attach(ret)
+
 fit <- stlda_em(docs, K, V, THETAs, OMEGAs, PHI)
+
+fit <- stlda_em(docs, K, V)
