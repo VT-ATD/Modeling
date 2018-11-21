@@ -4,12 +4,12 @@
 ## Kalman filter in multiple dimensions, isotropic error
 require(mvtnorm)
 
-sigma_x <- 0.1
+sigma_x <- 0.5
 sigma_z <- 0.1
 phi <- 0.8
-Y <- 70#Number of time points
+Y <- 100#Number of time points
 P <- 2# Dimensionality of space.
-Ms <- rpois(Y,15) + 1#Number of observations per time point
+Ms <- rpois(Y,100) + 1#Number of observations per time point
 mu <- 0
 
 # Transition matrix A
@@ -34,7 +34,8 @@ for (y in 1:Y) {
 }
 
 ## E step/likelihood
-run_est <- function(a) {
+#run_est <- function(sigma_x) {
+run_est <- function(a, sigma_z, sigma_x) {
     A <- matrix(a, nrow = P)
     # Storage
     X_hats <- matrix(NA, nrow = Y+1, ncol = P)
@@ -59,10 +60,19 @@ run_est <- function(a) {
     X_hats <- X_hats[-1,]
     return(list(nll = -log_lik, X_hats = X_hats))
 }
-n_log_lik <- function(a) run_est(a)$nll
+#n_log_lik <- function(param) run_est(param)$nll
+n_log_lik <- function(params) run_est(params[1:P^2], params[P^2+1], params[P^2+2])$nll
 
 set.seed(123)
-res <- optim(as.numeric(A), n_log_lik, method = 'L-BFGS-B')
-est <- matrix(res$par, ncol = P)
+minvar <- 1e-6
+res <- optim(c(as.numeric(A), sigma_z, sigma_x), n_log_lik, method = 'L-BFGS-B',
+             lower = c(rep(-Inf,P^2), minvar, minvar), 
+             upper = c(rep(Inf, P^2), Inf, Inf))
+est <- matrix(res$par[1:P^2], ncol = P)
 (est + t(est)) / 2
 A
+res$par[P^2+1]
+res$par[P^2+2]
+
+xs <- seq(0.001, 1, length.out = 1e2)
+plot(xs, sapply(xs, n_log_lik))
