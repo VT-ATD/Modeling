@@ -1,17 +1,17 @@
 #!/usr/bin/Rscript
-#  dev/kalman_filt.R Author "Nathan Wycoff <nathanbrwycoff@gmail.com>" Date 10.31.2018
+#  dev/kalman_filt_again.R Author "Nathan Wycoff <nathanbrwycoff@gmail.com>" Date 11.08.2018
 
 ## Get Kalman Filtering up and running for later integration with the EM algo.
 
 #TODO: We may be assuming mean zero.
 ###### For starters, 1D latent process and observed data together with multiple observations per time point.
-set.seed(123)
+set.seed(12345)
 # Params
 sigma_x <- 0.1
 sigma_z <- 0.5
 phi <- 0.8
 Y <- 50#Number of time points
-Ms <- rpois(Y,30) + 1#Number of observations per time point
+Ms <- rpois(Y,50) + 1#Number of observations per time point
 
 ## Simulate
 # Do latent process
@@ -29,39 +29,33 @@ for (y in 1:Y) {
 }
 
 ## E step/likelihood
-e_loglik <- function(z, Ms, phi, sigma_x, sigma_z) {
+n_log_lik <- function(phi) {
     # Storage
     x_hats <- c(0, rep(NA, Y))
     x_sig2s <- c(sigma_x^2, rep(NA, Y))
 
     log_lik <- 0
     for (y in 1:Y) {
-        x_sig2s[y+1] <- 1/(1/(phi^2 * x_sig2s[y] + sigma_x^2) + Ms[y]/sigma_z^2)
-        x_hats[y+1] <- x_sig2s[y+1] * (phi*x_hats[y] / (phi^2 * x_sig2s[y] + sigma_x^2) + mean(z[[y]]) / (sigma_z^2 / Ms[y]))
+        x_hats_var <- (phi^2 * x_sig2s[y] + sigma_x^2)
+        z_bar_var <- (sigma_z^2 / Ms[y])
+
+        x_sig2s[y+1] <- 1/(1/x_hats_var + 1/z_bar_var)
+        x_hats[y+1] <- x_sig2s[y+1] * (phi*x_hats[y] / x_hats_var  + mean(z[[y]]) / z_bar_var)
         for (m in 1:Ms[y]) {
             log_lik <- log_lik + dnorm(z[[y]][m], x_hats[y+1], sqrt(x_sig2s[y+1] + sigma_z^2), log = TRUE)
         }
     }
 
-    return(list(log_lik, x_hats))
+    return(-log_lik)
 }
 
-x_hats <- e_loglik(z, Ms, phi, sigma_x, sigma_z)[[2]]
+optim(phi, n_log_lik, method = "L-BFGS-B", lower = 0, upper = 1)
+
+phis <- seq(0, 100, length.out = 500)
+plot(phis, sapply(phis, n_log_lik))
 
 all <- c(x, x_hats)
 plot(NA, NA, xlim = c(1, Y), ylim = c(min(all), max(all)))
 points(x_hats, col = 'red')
 points(x, col = 'blue')
 points(sapply(z, mean), col = 'green')
-
-## Max Lik Estimation 
-cost <- function(params) {
-    phi <- params[1]
-    sigma_x <- params[2]
-    sigma_z <- params[3]
-
-    return(-e_loglik(z, Ms, phi, sigma_x, sigma_z)[[1]])
-}
-
-min_sd <- 1e-4
-optim(c(phi, sigma_x, sigma_z), cost, method = 'L-BFGS-B', lower = c(0,min_sd,min_sd))
