@@ -1,0 +1,416 @@
+---
+title: "Biweekly Report 2/4/19 - 2/18/19"
+author: "Shane Bookhultz"
+date: "February 18, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Continuing from the previous biweekly report, we have scraped more news articles. This set of analyses focuses on the government shutdown across multiple time spans, emulating a time-clustering LDA technique. The main purpose of this analysis is to show how topics can evolve over time, how large (global) media outlets convey their information compared to smaller (local) news outlets, and show how random noise articles can "weed" out the targeted signal noise.
+
+## Data Introduction
+
+With guidance from the ATD group, in addition to Dr. Leman's advice, we aimed for 3 main time periods focusing on the government shutdown. These time periods are the beginning of the 2018-2019 shutdown (centered around December 22, 2018), the end of the 2018-2019 shutdown (centered around January 25, 2019), and the looming idea of a second government shutdown (Middle of February). The date ranges chosen for these time periods were designed to be large enough so that enough articles would be written on the government shutdown; the time periods selected are December 19th-26th, January 22nd-29th, and February 8th-12th. To have a large probability of showing topics that concentrate on the government shutdown, we chose 5 randomly selected articles focused on the government shutdown and 15 other random articles selected in that time period (for each news outlet). Interestingly, in one of these time periods for the Roanoke Times, we were able to search all the articles they had published, where only 2.5% of the articles published had been related to the government shutdown. In the future, we should discuss analyses that focus on recognizing less mentioned topics. 
+
+The most difficult and tedious aspect of this analysis was collecting the websites. Twenty articles per news outlet and time period combination led to the analysis of 480 articles all-together. Eight news outlets were assessed, 4 global news outlets, and 4 local news outlets, respective to Virginia. The global news outlets are Fox News, Wall Street Journal, MSNBC, and the New York Times. The local news outlets are the Roanoke Times, Richmond Times-Dispatch, Virginian Pilot, and the News and Advance. These outlets were chosen, similarly to the last analysis, based on the ease of information scraping as well as differences on the bias spectrum. There will be some sort of web crawler, automatic web scraper, or api implemented in the future analyses, but for now we scraped these sites by copy and pasting links, restricting on topics and on the dates shown above. Additionally, please note that for the global sites, we were unable to locate all the articles (free of topic) in a certain time period without inputting a specific topic, so these sources may have some implicit bias, specifically MSNBC.  
+
+# Methodology
+
+The methodology used for scraping the websites consisted of using python to scrape the article's title and main body content, which was then saved and written to a seperate file for each article. From there, the articles pertaining to a certain news type and time (e.g., Local from December) were combined into a single text file. LDA was used under the package topicmodels and the results from the LDA are displayed in vertical barplots (which will be sorted in the future). 
+
+# Implementation/Results
+
+```{r loading, echo = F}
+suppressWarnings(suppressMessages(require(topicmodels)))
+suppressWarnings(suppressMessages(library("tm")))
+suppressWarnings(suppressMessages(library("SnowballC")))
+suppressWarnings(suppressMessages(library("wordcloud")))
+suppressWarnings(suppressMessages(library("RColorBrewer")))
+suppressWarnings(suppressMessages(library("RCurl")))
+suppressWarnings(suppressMessages(library("XML")))
+suppressWarnings(suppressMessages(library("ggplot2")))
+suppressWarnings(suppressMessages(library("dplyr")))
+suppressWarnings(suppressMessages(library("forcats")))
+# For gini
+suppressWarnings(suppressMessages(library("ineq")))
+```
+
+
+```{r Functions and code from website, echo = F}
+
+# Website is http://www.sthda.com/english/wiki/word-cloud-generator-in-r-one-killer-function-to-do-everything-you-need
+
+#++++++++++++++++++++++++++++++++++
+# rquery.wordcloud() : Word cloud generator
+# - http://www.sthda.com
+#+++++++++++++++++++++++++++++++++++
+# x : character string (plain text, web url, txt file path)
+# type : specify whether x is a plain text, a web page url or a file path
+# lang : the language of the text
+# excludeWords : a vector of words to exclude from the text
+# textStemming : reduces words to their root form
+# colorPalette : the name of color palette taken from RColorBrewer package, 
+  # or a color name, or a color code
+# min.freq : words with frequency below min.freq will not be plotted
+# max.words : Maximum number of words to be plotted. least frequent terms dropped
+# value returned by the function : a list(tdm, freqTable)
+rquery.wordcloud <- function(x, type=c("text", "url", "file"), 
+                          lang="english", excludeWords=NULL, 
+                          textStemming=FALSE,  colorPalette="Dark2",
+                          min.freq=3, max.words=200)
+{ 
+  library("tm")
+  library("SnowballC")
+  library("wordcloud")
+  library("RColorBrewer") 
+  
+  if(type[1]=="file") text <- readLines(x)
+  else if(type[1]=="url") text <- html_to_text(x)
+  else if(type[1]=="text") text <- x
+  
+  # Load the text as a corpus
+  docs <- VCorpus(VectorSource(text))
+  # Convert the text to lower case
+  docs <- tm_map(docs, content_transformer(tolower))
+  # Remove numbers
+  docs <- tm_map(docs, removeNumbers)
+  # Remove stopwords for the language 
+  docs <- tm_map(docs, removeWords, stopwords(lang))
+  # Remove punctuations
+  docs <- tm_map(docs, removePunctuation)
+  # Eliminate extra white spaces
+  docs <- tm_map(docs, stripWhitespace)
+  # Remove your own stopwords
+  if(!is.null(excludeWords)) 
+    docs <- tm_map(docs, removeWords, excludeWords) 
+  
+  ###### I'm going to remove quotes
+  # Somehow
+  
+  # Text stemming
+  if(textStemming) docs <- tm_map(docs, stemDocument)
+  # Create term-document matrix
+  tdm <- TermDocumentMatrix(docs)
+  m <- as.matrix(tdm)
+  v <- sort(rowSums(m),decreasing=TRUE)
+  d <- data.frame(word = names(v),freq=v)
+  # check the color palette name 
+  if(!colorPalette %in% rownames(brewer.pal.info)) colors = colorPalette
+  else colors = brewer.pal(8, colorPalette) 
+  # Plot the word cloud
+  set.seed(1234)
+  wordcloud(d$word,d$freq, min.freq=min.freq, max.words=max.words,
+            random.order=FALSE, rot.per=0.35, 
+            use.r.layout=FALSE, colors=colors)
+  
+  invisible(list(tdm=tdm, freqTable = d))
+}
+#++++++++++++++++++++++
+# Helper function
+#++++++++++++++++++++++
+# Download and parse webpage
+html_to_text<-function(url){
+  library(RCurl)
+  library(XML)
+  # download html
+  html.doc <- getURL(url)  
+  #convert to plain text
+  doc = htmlParse(html.doc, asText=TRUE)
+ # "//text()" returns all text outside of HTML tags.
+ # We also donÃ¢ÂÂt want text such as style and script codes
+  text <- xpathSApply(doc, "//text()[not(ancestor::script)][not(ancestor::style)][not(ancestor::noscript)][not(ancestor::form)]", xmlValue)
+  # Format text vector into one character string
+  return(paste(text, collapse = " "))
+}
+
+get.TF <- function(x, type=c("text", "url", "file"), 
+                          lang="english", excludeWords=NULL, 
+                          textStemming=FALSE,  colorPalette="Dark2",
+                          min.freq=3, max.words=200)
+{ 
+  library("tm")
+  library("SnowballC")
+  library("wordcloud")
+  library("RColorBrewer") 
+  
+  if(type[1]=="file") text <- readLines(x)
+  else if(type[1]=="url") text <- html_to_text(x)
+  else if(type[1]=="text") text <- x
+  
+  # Load the text as a corpus
+  docs <- VCorpus(VectorSource(text))
+  # Convert the text to lower case
+  docs <- tm_map(docs, content_transformer(tolower))
+  # Remove numbers
+  docs <- tm_map(docs, removeNumbers)
+  # Remove stopwords for the language 
+  docs <- tm_map(docs, removeWords, stopwords(lang))
+  # Remove punctuations
+  docs <- tm_map(docs, removePunctuation)
+  # Eliminate extra white spaces
+  docs <- tm_map(docs, stripWhitespace)
+  # Remove your own stopwords
+  if(!is.null(excludeWords)) 
+    docs <- tm_map(docs, removeWords, excludeWords)
+  
+  # Text stemming
+  if(textStemming) docs <- tm_map(docs, stemDocument)
+  # Create term-document matrix
+  tdm <- TermDocumentMatrix(docs)
+  m <- as.matrix(tdm)
+  v <- sort(rowSums(m),decreasing=TRUE)
+  d <- data.frame(word = names(v),freq=v)
+  # check the color palette name 
+  # if(!colorPalette %in% rownames(brewer.pal.info)) colors = colorPalette
+  # else colors = brewer.pal(8, colorPalette) 
+  # # Plot the word cloud
+  # set.seed(1234)
+  # wordcloud(d$word,d$freq, min.freq=min.freq, max.words=max.words,
+  #           random.order=FALSE, rot.per=0.35, 
+  #           use.r.layout=FALSE, colors=colors)
+  # 
+  # invisible(list(tdm=tdm, freqTable = d))
+  return (tdm)
+}
+
+
+
+```
+
+```{r Readin data, echo = F,eval=F}
+# I will use get.TF
+# That will put it in a text term frequency matrix which will allow LDA to work on
+#setwd("~/ATD Group Spring 2019")
+setwd("~/ATD Group Spring 2019/Analysis for Feb 13")
+textvec <- c("TextLocal1219_2618.txt","TextLocal0122_2919.txt","TextLocal0208_1219.txt","TextGlobal1219_2618.txt","TextGlobal0122_2919.txt","TextGlobal0208_1219.txt")
+textlist <- list()
+docs <- list()
+iterator <- 1
+for(iter in 1:6) {
+  textlist[[iter]] <- readLines(textvec[iter])
+  for(iter2 in 1:length(textlist[[iter]])) {
+    docs[[iterator]] <- get.TF(textlist[[iter]][iter2])
+    iterator <- iterator + 1
+  }
+}
+tlist <- c(textlist[[1]],textlist[[2]],textlist[[3]],textlist[[4]],textlist[[5]],textlist[[6]])
+tmatdoc <- as.DocumentTermMatrix(get.TF(tlist))
+# Docs is now a list of 32 dataframe tf matrices
+LDAboi <- LDA(tmatdoc,k=6,control=list(seed=1222))
+library(dplyr)
+library(tidytext)
+suppressWarnings(library(forecast))
+topicss <- tidy(LDAboi, matrix="beta")
+
+ap_top_terms <- topicss %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta) #%>%
+  #mutate(term = reorder(term, desc(-beta)))
+
+
+
+ap_top_terms %>%
+  mutate(term = reorder(term, desc(-beta))) %>%
+  ggplot(aes(x=term, y=beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() 
+
+# How to reorder within each topic?
+# Unable to actually reorder per topic
+
+# In order to use Gini, all you need to do is 
+
+#ineq(unlist(topicss[which(topicss$topic==1),3]),type="Gini")
+
+```
+
+```{r Function for LDA, echo = T}
+LDAgraphic <- function(textvec,numtopics,seedset=150) {
+  setwd("~/ATD Group Spring 2019/Analysis for Feb 13")
+  textlist <- list()
+  docs <- list()
+  iterator <- 1
+  stopwordlist <- c("said", "will")
+  for(iter in 1:length(textvec)) {
+    textlist[[iter]] <- readLines(textvec[iter])
+    for(iter2 in 1:length(textlist[[iter]])) {
+      docs[[iterator]] <- get.TF(textlist[[iter]][iter2],excludeWords = stopwordlist)
+      iterator <- iterator + 1
+    }
+  }
+  tlist <- unlist(textlist)
+  #tlist <- c(textlist[[1]],textlist[[2]],textlist[[3]],textlist[[4]],textlist[[5]],textlist[[6]])
+  tmatdoc <- as.DocumentTermMatrix(get.TF(tlist,excludeWords = stopwordlist))
+  # Docs is now a list of 32 dataframe tf matrices
+  LDAboi <- LDA(tmatdoc,k=numtopics,control=list(seed=seedset))
+  suppressMessages(suppressWarnings(library(dplyr)))
+  suppressMessages(suppressWarnings(library(tidytext)))
+  topicss <- tidy(LDAboi, matrix="beta")
+  
+  ap_top_terms <- topicss %>%
+    group_by(topic) %>%
+    top_n(10, beta) %>%
+    ungroup() %>%
+    arrange(topic, -beta) 
+  
+  # ap_top_terms <- transform(ap_top_terms, beta = reorder(beta, order(topic, beta, decreasing=T)))
+  # 
+  mygraphic <- ap_top_terms %>%
+    mutate(term = reorder(term, beta)) %>%
+    ggplot(aes(x=term, y=beta, fill = factor(topic))) +
+    geom_col(show.legend = FALSE) +
+    facet_wrap(~ topic, scales = "free") +
+    coord_flip() +
+    ylim(0,0.025)
+  
+  # Now to calculate Gini indexes
+  Ginivec <- c()
+  for(i in 1:numtopics) {
+    Ginivec[i] <- ineq(unlist(topicss[which(topicss$topic==i),3]),type="Gini")
+  }
+  
+  retlist <- list(mygraphic,Ginivec,topicss)
+  
+  return (retlist)
+  
+}
+
+```
+
+
+```{r plots, echo = F, cache=T}
+diftextvec <- c("TextLocal1219_2618.txt","TextLocal0122_2919.txt","TextLocal0208_1219.txt","TextGlobal1219_2618.txt","TextGlobal0122_2919.txt","TextGlobal0208_1219.txt")
+
+randlist <- c()
+
+allLocal<-suppressWarnings(LDAgraphic(diftextvec[c(1,2,3)],numtopics=6,seedset = 180))
+Local2 <- LDAgraphic(diftextvec[c(1,2,3)],numtopics = 6, seedset = 551) # need to try different seeds
+allGlobal<-LDAgraphic(diftextvec[c(4,5,6)],numtopics=6,seedset=240)
+deccombined <- LDAgraphic(diftextvec[c(1,4)],numtopics=6,seedset=305)
+jancombined <- LDAgraphic(diftextvec[c(2,5)],numtopics=6, seedset=5555)
+febcombined <- LDAgraphic(diftextvec[c(3,6)],numtopics=6, seedset=4500)
+piclist <- list()
+set.seed(455)
+for(t in 1:length(diftextvec))
+  piclist[[t]] <- LDAgraphic(diftextvec[t],numtopics=6,seedset=runif(1,1,555555))
+
+```
+
+
+
+```{r Section1, fig.cap="All Local News LDA", echo = F, fig.height=3, fig.width=6}
+allLocal
+```
+
+In the above Local News LDA topic-word importance plot, we can see that the government shutdown topic is displayed in topic 3. Additionally, we can see that these local news sources mentioned Christmas, which was surrounding the December dates, so we may need to look for accounting for time-related events (Also the Super Bowl is mentioned as topic 4). We also see some encoding issues that may need to be handled here.
+
+```{r Section2, fig.cap ="All Global News LDA", echo = F, fig.height=3, fig.width=6}
+allGlobal
+```
+
+In the Global LDA graphic, most obviously we see trump being mentioned in every topic, something that might be simply an artifact of the data we obtained. Furthermore, we can see more encoding issues. The government shutdown is mentioned in topic 5/6. Other than the government shutdown being mentioned, we don't see clear, comprehendible topics here. 
+
+```{r Section3, fig.cap = "All December News (12/19-12/26)",echo=F, fig.height=3, fig.width=6}
+deccombined
+```
+
+Now looking at the monthly graphics, we can see in all of the December news that there is a December topic, also seen in Figure 1. There is also a "trash" topic, topic 3, where most of the words are words that will need to be filtered out through preprocessing. We can see a new topic emerge in topic 5, which talks about a tsunami occuring in Indonesia. 
+
+```{r Section4, fig.cap = "All January News (1/22-1/29)", echo = F, fig.height=3, fig.width=6}
+jancombined
+```
+
+Looking at all January news articles, we can see that the government shutdown is mentioned in topics 2,4, and 5. Additionally, topic 1 relates to the Super Bowl, but topics 3 and 6 are new, compared to the overall news. Topic 3 relates to media discussing Trump and topic 6 talks about someone named Emma Murphy.  
+
+\vspace{20mm}
+
+```{r Section5, fig.cap = "All February News (2/8-2/12)", echo = F, fig.height=3, fig.width=6}
+febcombined
+```
+
+The government shutdown topic is topic 1 in this figure. Additionally, this month features topic 2 dealing with the Virginia Justin Fairfax lieutenant governor. Other topics that this month features are a video game dealing with Virginia and snow in tax season. 
+
+```{r Section6, fig.cap = "Local December", echo = F, fig.height=3, fig.width=6}
+piclist[[1]]
+```
+
+```{r Section7, fig.cap = "Local January", echo = F, fig.height=3, fig.width=6}
+piclist[[2]]
+```
+
+```{r Section8, fig.cap = "Local February", echo = F, fig.height=3, fig.width=6}
+piclist[[3]]
+```
+
+```{r Section9, fig.cap = "Global December", echo = F, fig.height=3, fig.width=6}
+piclist[[4]]
+```
+
+```{r Section10, fig.cap = "Global January", echo = F, fig.height=3, fig.width=6}
+piclist[[5]]
+```
+
+```{r Section11, fig.cap = "Global February", echo = F, fig.height=3, fig.width=6}
+piclist[[6]]
+```
+
+\vspace{160mm}
+
+The 6 above graphics show the furthest breakdown of topic distributions, with each graphic representing a time period and news source type combination. All 6 graphics mention the government shutdown, and quite a few have words encoded incorrectly. The local news sources seem to pull out topics related to the month more often and topics dealing with one article (might be more dispersion in topics). The global news sources focus on more political topics. 
+
+# Comparisons to other methods
+
+## Adapting to User Interest Drift for POI (Point of Interest) Recommendation (Yin et al. 2016)
+
+Summary: Utilizes a "ST-LDA" (Spatio-Temporal LDA) to infer which users want to do certain activities in different locations. The spatial aspect focuses on partitioning the space (they cluster) then performs LDA on that space for each user (doc). The temporal aspect focuses on which time of day that the users perform certain activities (the authors give an example of lunch/dinner at a restaurant but at midnight a nightclub might be more popular). Additionally, the each topic has a distribution over time, represented by a multinomial distribution, where topics are influenced by similar temporal patterns. Spatially, they generate geographical locations of these interest places (POI) by a normal distribution based on a mean and covariance matrix from each region. In the generative model, all the multinomial distributions have conjugate Dirichlet priors. Furthermore, for each check-in (an instantiation of a POI) they sample a random region, a topic, a POI, and then  geographical coordinate based on the POI and region chosen. Then based on the topic, they sample words from that topic and then sample a time point based on that topic. Their model inference uses Gibbs EM algorithm, in the EM algorithm, the E-step is sampled using collapsed Gibbs, and the M-step maximizes keeping region and time constant (doing this for each region and time). They compare the performance of their model to different geographical modeling methods along with POI specific methodology. They obtain higher accuracy using this method than the previous mentioned methods.   
+
+1. Pros:
+  + Considers both spatial and time elements
+  + Conjugate analysis allows analytic marginal posteriors for Gibbs  
+2. Cons:
+  + Training time is slower than their comparative methods
+
+## Spatial-Temporal Event Detection from Geo-Tagged Tweets (Huang et al. 2018)
+
+## Spatial-based Topic Modeling using Wikidata Knowledge Bas (Lim et al. 2017)
+
+## Spatio-Temporal Topic Modeling in Mobile Social Media for Location Recommendation (Hu et al. 2013)
+
+## Topic mining of tourist attractions based on a seasonal context aware LDA model (Huang et al. 2017)
+
+# Future improvements/works
+
+For future implementation of scraping news articles off of the internet, we will use an api called newsapi. This api will allow us to scrap 1000 articles a day from up to a month from the date we scrape. One pitfall that might be ahead of us might be that the free version of the news api limits the content to what we receive (only top 200 or so characters), so we might need to use the url to scrape even more. Other possible solutions include an RSS feed, a web crawler, or an automated web scraper. 
+
+On the statistical modeling front, we will implement a temporally affected LDA model to see how time interacts with each of these topics. Most likely, we will use each day as a temporal unit. 
+
+```{r multiple models, echo = F, cache=T}
+set.seed(100)
+TT <- 200
+
+savelist <- list()
+seedvec <- c()
+# Looking at all Local news sources
+# Do i need to write to file?
+for(ttt in 1:TT) {
+  seedvec[ttt] <- runif(1,1,44444)
+  savelist[[ttt]] <- LDAgraphic(diftextvec[c(1,2,3)],numtopics=6,seedset = seedvec[ttt])
+}
+
+```
+
+```{r Gini of overall topic dist, echo = F}
+
+# How to come up with topic, when they change around numbering, etc. 
+# Do I look for just certain words in the topic to know that is the topic I should be looking fo?
+# Look up LDAtuning, change number of topics from 2 to 7
+# What to do with Gini 
+```
